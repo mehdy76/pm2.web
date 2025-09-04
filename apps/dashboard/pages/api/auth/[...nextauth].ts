@@ -12,11 +12,11 @@ import connectDB from "../../../middleware/mongodb";
 const providers = () => {
   const p = [];
 
-  if (process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID && process.env.GITHUB_SECRET) {
+  if (process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID && process.env.NEXT_PUBLIC_GITHUB_SECRET_ID) {
     p.push(
       GithubProvider({
         clientId: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID,
-        clientSecret: process.env.GITHUB_SECRET,
+        clientSecret: process.env.NEXT_PUBLIC_GITHUB_SECRET_ID,
         userinfo: {
           url: "https://api.github.com/user",
           async request({ client, tokens }) {
@@ -78,13 +78,79 @@ const providers = () => {
     );
   }
 
-  if (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  if (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && process.env.NEXT_PUBLIC_GOOGLE_SECRET_ID) {
     p.push(
-      GoogleProvider({
-        clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      }),
-    );
+    GoogleProvider({
+        clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.NEXT_PUBLIC_GOOGLE_SECRET_ID as string,
+
+        userinfo: {
+        async request({ client, tokens }) {
+            const profile = await client.userinfo(tokens.access_token!);
+            await connectDB();
+
+            if (!profile.email) throw new Error("NoEmail");
+
+            let user = await userModel.findOne({
+            email: { $regex: new RegExp(profile.email, "i") },
+            });
+
+            if (!user) {
+            console.log(`User not found with email ${profile.email}, creating new account...`);
+
+            const newUser = new userModel({
+                name: profile.name,
+                email: profile.email,
+                password: Math.random().toString(36).slice(-8),
+                acl: {
+                owner: false,
+                admin: false,
+                servers: [],
+                },
+                oauth2: {
+                provider: "google",
+                providerUserId: profile.sub as string,
+                },
+            });
+
+            await newUser.save();
+            user = newUser;
+            }
+            if (!user.oauth2?.provider) {
+            user.oauth2 = {
+                provider: "google",
+                providerUserId: profile.sub as string,
+            };
+            await user.save();
+            }
+
+            const u = user.toJSON();
+
+            if (!u.acl.owner && !u.acl.admin && !u.acl?.servers?.length) {
+            throw new Error("Unauthorized");
+            }
+
+            return {
+            ...profile,
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            userObj: u,
+            };
+        },
+        },
+
+        profile(profile) {
+        return {
+            id: profile.id.toString(),
+            name: profile.name,
+            email: profile.email,
+            image: profile.picture,
+            ...profile.userObj,
+        };
+        },
+    })
+    ); 
   }
 
   p.push(
@@ -174,7 +240,7 @@ const providers = () => {
       },
     }),
   );
-
+  console.log(p);
   return p;
 };
 
