@@ -67,7 +67,15 @@ export default function AuthenticationForm({
             <Text size="xl" fw={500}>
               Welcome to pm2.web, {type} with
             </Text>
-
+            <Stack>
+              <Transition transition="fade" duration={300} mounted={!!error}>
+                {(styles) => (
+                  <div style={styles}>
+                    <SignInError error={error as string} />
+                  </div>
+                )}
+                </Transition>
+            </Stack>
             {type !== "register" && (
               <>
                 <Group grow mb="md" mt="md">
@@ -118,7 +126,7 @@ export default function AuthenticationForm({
 const errors = {
   Signin: "Unable to sign in with this account. Please try signing in with a different account.",
   OAuthSignin: "Unable to sign in with this account. Please try signing in with a different account.",
-  OAuthCallback: "Unable to sign in with this account. Please try signing in with a different account.",
+  OAuthCallback: "Your account is awaiting activation by an administrator. Please try again later.",
   OAuthLinked: "Account is linked to an Authentication Provider. Please sign in with the same Authentication Provider.",
   OAuthCreateAccount: "Unable to create an account with this provider. Please try signing in with a different account.",
   EmailCreateAccount:
